@@ -14,6 +14,7 @@ HardwareSerial BusSerial(2);
 #define CMD_LOAD  0x1F
 #define CMD_MODE  0x1D
 #define CMD_WRITE_ID  0x0D
+//Test
 
 #pragma region 輸入端
 
