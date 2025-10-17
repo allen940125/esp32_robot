@@ -159,8 +159,8 @@ void setup() {
   //sendPack(1, CMD_MODE, motor1, 4);
   //sendPack(2, CMD_MODE, motor2, 4);
 
-  std::vector<uint8_t> motor1 = makeBytes(1, 1000);
-  std::vector<uint8_t> motor2 = makeBytes(1, -1000);
+  std::vector<uint8_t> motor1 = makeBytes(1, -1000);
+  std::vector<uint8_t> motor2 = makeBytes(1, 1000);
 
   sendPack(1, CMD_MODE, motor1.data(), motor1.size());
   sendPack(2, CMD_MODE, motor2.data(), motor2.size());
