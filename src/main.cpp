@@ -1,5 +1,32 @@
 #include <Arduino.h>
 #include <vector>
+#include <WiFi.h>
+#include <esp_wifi.h>
+#include <esp_now.h>
+
+#pragma region 網路
+
+void readMacAddress(){
+  uint8_t baseMac[6];
+  esp_err_t ret = esp_wifi_get_mac(WIFI_IF_STA, baseMac);
+  if (ret == ESP_OK) {
+    Serial.printf("%02x:%02x:%02x:%02x:%02x:%02x\n",
+                  baseMac[0], baseMac[1], baseMac[2],
+                  baseMac[3], baseMac[4], baseMac[5]);
+  } else {
+    Serial.println("Failed to read MAC address");
+  }
+}
+
+#pragma endregion
+
+// Create a struct_message called myData
+float myData;
+
+// callback function that will be executed when data is received
+void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
+  memcpy(&myData, incomingData, sizeof(myData));
+}
 
 // put function declarations here:
 // UART2 → GPIO18,19 （保持你现在跑得通的配置）
@@ -108,6 +135,9 @@ std::vector<uint8_t> buildAngleBytes(double angleDegrees, uint16_t timeMs) {
 
 #pragma endregion
 
+std::vector<uint8_t> motor1 = makeBytes(1, -900);
+std::vector<uint8_t> motor2 = makeBytes(1, 1000);
+
 #pragma region 執行端
 
 void setup() {
@@ -115,6 +145,14 @@ void setup() {
   Serial.begin(115200);
   BusSerial.begin(115200, SERIAL_8N1, RX_PIN, TX_PIN);
   delay(100);
+
+  //wifi
+
+  WiFi.mode(WIFI_STA);  //設定 WiFi的模式為 STA，共有 WIFI_AP、WIFI_STA、WIFI_AP_STA、WIFI_OFF。
+  WiFi.begin();
+
+  Serial.print("[DEFAULT] ESP32 Board MAC Address: ");
+  readMacAddress();
 
   // 上载扭力
   uint8_t on=1;
@@ -125,17 +163,6 @@ void setup() {
   scan();
 
   //測試旋轉
-
-  // uint8_t op=2;
-  // sendPack(1, CMD_WRITE_ID, &op, 1);
-
-  // uint8_t p0[]={0,0,100,0};
-  // sendPack(1,CMD_MOVE,p0,4);
-  // sendPack(2,CMD_MOVE,p0,4);
-  // delay(500);
-  // uint8_t p90[]={0x77,0x01,100,0};
-  // sendPack(1,CMD_MOVE,p90,4);
-  // sendPack(2,CMD_MOVE,p90,4);
 
   auto p90 = buildAngleBytes(90.0, 100);   // 90°，100ms
   sendPack(1, CMD_MOVE, p90.data(), p90.size());
@@ -151,31 +178,53 @@ void setup() {
 
   //測試移動
 
-  //std::vector<uint8_t> p180 = makeBytes(180);
-  
-  //uint8_t motor1[] = {0x01, 0, 0xF4, 0x01};
-  //uint8_t motor2[] = {0x01, 0, 0x0C, 0xFE};
-
   //sendPack(1, CMD_MODE, motor1, 4);
   //sendPack(2, CMD_MODE, motor2, 4);
 
-  std::vector<uint8_t> motor1 = makeBytes(1, -1000);
-  std::vector<uint8_t> motor2 = makeBytes(1, 1000);
+  // Set device as a Wi-Fi Station
+  WiFi.mode(WIFI_STA);
+  myData = 0.0;
+
+  // Init ESP-NOW
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Error initializing ESP-NOW");
+    return;
+  }
+  
+  // Once ESPNow is successfully Init, we will register for recv CB to
+  // get recv packer info
+  esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
+}
+
+void loop() 
+{
+  if(myData > 40)
+  {
+    motor1 = makeBytes(1, -900);
+    motor2 = makeBytes(1, 1000);
+  }
+  else if(myData > 30)
+  {
+    motor1 = makeBytes(1, -900 * 0.8f);
+    motor2 = makeBytes(1, 1000 * 0.8f);
+  }
+  else if(myData > 20)
+  {
+    motor1 = makeBytes(1, -900 * 0.5f);
+    motor2 = makeBytes(1, 1000 * 0.5f);
+  }
+  else
+  {
+    motor1 = makeBytes(1, 0);
+    motor2 = makeBytes(1, 0);
+  }
 
   sendPack(1, CMD_MODE, motor1.data(), motor1.size());
   sendPack(2, CMD_MODE, motor2.data(), motor2.size());
-}
+  Serial.print("Distance: ");
+  Serial.println(myData);
 
-void loop() {
-  // put your main code here, to run repeatedly:
-  // uint8_t steps[4][4] = {{0x00, 0x00, 0xF4, 0x01}, {0x77, 0x01, 0xF4, 0x01}, {0xEE, 0x02, 0xF4, 0x01}, {0xE8, 0x03, 0xF4, 0x01}};
-
-  // for(int i = 0; i < 4; i++)
-  // {
-  //   sendPack(1, CMD_MOVE, steps[i], 4);
-  //   Serial.printf("Move to %d°\n", i*90);
-  //   delay(1000);
-  // }
+  delay(500);
 }
 
 #pragma endregion
